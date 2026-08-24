@@ -1,0 +1,12 @@
+trigger:
+- feature/Module
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+
+- script: |
+    echo "Pipeline started successfully"
+    echo "Branch: $(Build.SourceBranchName)"
+  displayName: 'Pipeline Test'
