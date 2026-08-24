@@ -1,0 +1,103 @@
+trigger:
+  branches:
+    include:
+      - feature/Module 
+
+variables:
+  tf_working_dir: 'Environment/Dev' 
+  
+  # ⚠️ NAYE TOOLS KE VARIABLES (Inhe Azure DevOps Variable Group me add karna hoga)
+  # SONAR_HOST_URL: 'https://sonarcloud.io' # Ya tumhara apna SonarQube Server URL
+  # SONAR_TOKEN: 'your_sonarqube_token_here'
+  # INFRACOST_API_KEY: 'your_infracost_api_key_here'
+
+stages:
+- stage: Terraform_CI
+  displayName: 'Terraform CI 🚀'
+  jobs:
+  - job: Terraform_Checks
+    displayName: 'Quality, Security & Cost Checks'
+    pool:
+      vmImage: 'ubuntu-latest'
+    steps:
+    
+    # 1. Install Terraform
+    - script: |
+        TERRAFORM_VERSION="1.7.5"
+        curl -LO "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip"
+        unzip "terraform_${TERRAFORM_VERSION}_linux_amd64.zip"
+        sudo mv terraform /usr/local/bin/
+      displayName: 'Install Terraform Manually'
+
+    # 2. Gitleaks (Secret Scanning - Passwords/Keys hardcode toh nahi?)
+    - script: |
+        wget https://github.com/gitleaks/gitleaks/releases/download/v8.18.2/gitleaks_8.18.2_linux_x64.tar.gz
+        tar -zxvf gitleaks_8.18.2_linux_x64.tar.gz
+        sudo mv gitleaks /usr/local/bin/
+        gitleaks detect --source . --verbose
+      displayName: 'Gitleaks (Secret Scanning)'
+      continueOnError: true
+
+    # 3. Terraform Format
+    - script: terraform fmt -check
+      displayName: 'Terraform Format (fmt)'
+      workingDirectory: $(tf_working_dir)
+      continueOnError: true
+
+    # 4. Terraform Init
+    - script: terraform init
+      displayName: 'Terraform Init'
+      workingDirectory: $(tf_working_dir)
+
+    # 5. Terraform Validate
+    - script: terraform validate
+      displayName: 'Terraform Validate'
+      workingDirectory: $(tf_working_dir)
+
+    # 6. TFLint
+    - script: |
+        curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash
+        tflint
+      displayName: 'TFLint'
+      workingDirectory: $(tf_working_dir)
+      continueOnError: true
+
+    # 7. tfsec
+    - script: |
+        curl -s https://raw.githubusercontent.com/aquasecurity/tfsec/master/scripts/install_linux.sh | bash
+        tfsec .
+      displayName: 'tfsec (Security Scan)'
+      workingDirectory: $(tf_working_dir)
+      continueOnError: true
+
+    # 8. SonarQube Analysis (Code Quality)
+    - script: |
+        wget https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-5.0.1.3006-linux.zip
+        unzip sonar-scanner-cli-5.0.1.3006-linux.zip
+        export PATH=$PATH:$(pwd)/sonar-scanner-5.0.1.3006-linux/bin
+        
+        sonar-scanner \
+          -Dsonar.projectKey=Vistara-Dashboard-Terraform \
+          -Dsonar.sources=$(tf_working_dir) \
+          -Dsonar.host.url=$(SONAR_HOST_URL) \
+          -Dsonar.login=$(SONAR_TOKEN)
+      displayName: 'SonarQube Analysis'
+      continueOnError: true
+
+    # 9. Cost Optimization (Infracost - Cloud Bill Estimate)
+    - script: |
+        curl -fsSL https://raw.githubusercontent.com/infracost/infracost/master/scripts/install.sh | bash
+        infracost configure set api_key $(INFRACOST_API_KEY)
+        infracost breakdown --path $(tf_working_dir)
+      displayName: 'Infracost (Cost Optimization)'
+      continueOnError: true
+
+    # 10. Terraform Plan
+    - script: terraform plan -out=tfplan
+      displayName: 'Terraform Plan'
+      workingDirectory: $(tf_working_dir)
+      env:
+        ARM_CLIENT_ID: $(ARM_CLIENT_ID)
+        ARM_CLIENT_SECRET: $(ARM_CLIENT_SECRET)
+        ARM_SUBSCRIPTION_ID: $(ARM_SUBSCRIPTION_ID)
+        ARM_TENANT_ID: $(ARM_TENANT_ID)
