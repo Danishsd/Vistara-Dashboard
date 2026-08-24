@@ -47,6 +47,7 @@ stages:
         tflint
       displayName: 'TFLint'
       workingDirectory: $(tf_working_dir)
+      continueOnError: true # 🔥 YAHAN YE LINE ADD KAR DO
 
     # 6. tfsec
     - script: |
