@@ -1,10 +1,9 @@
 trigger:
   branches:
     include:
-      - feature/Module # Trigger on your current branch
+      - feature/Module 
 
 variables:
-  # 🔥 Exact folder path based on your screenshot
   tf_working_dir: 'Environment/Dev' 
 
 stages:
@@ -17,17 +16,20 @@ stages:
       vmImage: 'ubuntu-latest'
     steps:
     
-    # 1. Install Terraform
-    - task: TerraformInstaller@1
-      displayName: 'Install Terraform'
-      inputs:
-        terraformVersion: 'latest'
+    # 🔥 1. FIXED: Install Terraform manually via Script (No extension needed)
+    - script: |
+        TERRAFORM_VERSION="1.7.5"
+        curl -LO "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip"
+        unzip "terraform_${TERRAFORM_VERSION}_linux_amd64.zip"
+        sudo mv terraform /usr/local/bin/
+        terraform --version
+      displayName: 'Install Terraform Manually'
 
     # 2. Terraform Format
     - script: terraform fmt -check
       displayName: 'Terraform Format (fmt)'
       workingDirectory: $(tf_working_dir)
-      continueOnError: true # Agar format sahi nahi hai toh pipeline fail na ho abhi
+      continueOnError: true
 
     # 3. Terraform Init
     - script: terraform init
@@ -59,8 +61,6 @@ stages:
       displayName: 'Terraform Plan'
       workingDirectory: $(tf_working_dir)
       env:
-        # Azure Authentication Variables
-        # Ye tumhe Azure DevOps ke 'Library' (Variable Groups) me set karne honge
         ARM_CLIENT_ID: $(ARM_CLIENT_ID)
         ARM_CLIENT_SECRET: $(ARM_CLIENT_SECRET)
         ARM_SUBSCRIPTION_ID: $(ARM_SUBSCRIPTION_ID)
