@@ -1,12 +1,67 @@
 trigger:
-- feature/Module
+  branches:
+    include:
+      - feature/Module # Trigger on your current branch
 
-pool:
-  vmImage: ubuntu-latest
+variables:
+  # 🔥 Exact folder path based on your screenshot
+  tf_working_dir: 'Environment/Dev' 
 
-steps:
+stages:
+- stage: Terraform_CI
+  displayName: 'Terraform CI 🚀'
+  jobs:
+  - job: Terraform_Checks
+    displayName: 'Code Quality & Plan'
+    pool:
+      vmImage: 'ubuntu-latest'
+    steps:
+    
+    # 1. Install Terraform
+    - task: TerraformInstaller@1
+      displayName: 'Install Terraform'
+      inputs:
+        terraformVersion: 'latest'
 
-- script: |
-    echo "Pipeline started successfully"
-    echo "Branch: $(Build.SourceBranchName)"
-  displayName: 'Pipeline Test'
+    # 2. Terraform Format
+    - script: terraform fmt -check
+      displayName: 'Terraform Format (fmt)'
+      workingDirectory: $(tf_working_dir)
+      continueOnError: true # Agar format sahi nahi hai toh pipeline fail na ho abhi
+
+    # 3. Terraform Init
+    - script: terraform init
+      displayName: 'Terraform Init'
+      workingDirectory: $(tf_working_dir)
+
+    # 4. Terraform Validate
+    - script: terraform validate
+      displayName: 'Terraform Validate'
+      workingDirectory: $(tf_working_dir)
+
+    # 5. TFLint
+    - script: |
+        curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash
+        tflint
+      displayName: 'TFLint'
+      workingDirectory: $(tf_working_dir)
+
+    # 6. tfsec
+    - script: |
+        curl -s https://raw.githubusercontent.com/aquasecurity/tfsec/master/scripts/install_linux.sh | bash
+        tfsec .
+      displayName: 'tfsec (Security Scan)'
+      workingDirectory: $(tf_working_dir)
+      continueOnError: true
+
+    # 7. Terraform Plan
+    - script: terraform plan -out=tfplan
+      displayName: 'Terraform Plan'
+      workingDirectory: $(tf_working_dir)
+      env:
+        # Azure Authentication Variables
+        # Ye tumhe Azure DevOps ke 'Library' (Variable Groups) me set karne honge
+        ARM_CLIENT_ID: $(ARM_CLIENT_ID)
+        ARM_CLIENT_SECRET: $(ARM_CLIENT_SECRET)
+        ARM_SUBSCRIPTION_ID: $(ARM_SUBSCRIPTION_ID)
+        ARM_TENANT_ID: $(ARM_TENANT_ID)
